@@ -1,3 +1,4 @@
+#Pascal Schäfer
 import socket
 import hashlib
 import os

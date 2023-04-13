@@ -1,3 +1,4 @@
+#Pascal Schäfer
 import socket
 import hashlib
 import os
@@ -9,7 +10,7 @@ UDP_IP = 'localhost'    #127.0.0.1'
 UDP_PORT = 5005
 
 # Wähle die zu sendende Datei
-filename = 'example2.txt'
+filename = 'example.txt'
 
 # Erstelle UDP-Socket
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
