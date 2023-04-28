@@ -4,9 +4,10 @@ import hashlib
 import os
 import struct
 import sys
+import time
 
 
-def execute_send(transmissionid,PORT,ipadress,thisfilname):
+def execute_send(transmissionid,PORT,ipadress,thisfilnamepath):
 
 
     # Definiere Konstanten
@@ -15,15 +16,17 @@ def execute_send(transmissionid,PORT,ipadress,thisfilname):
     UDP_PORT = int(PORT)   #5005
 
     # Wähle die zu sendende Datei
-    filename = thisfilname       #'example.txt'
-
+    filenamebase = os.path.basename(thisfilnamepath)      #'example.txt'
+    #/home/Pascal/Studium/Netze/Projekt1/Abgabe/NetzePS/Transmitter/example.txt
+    #or just example.txt when file in same dir
+    filenameabs= thisfilnamepath
     # Erstelle UDP-Socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     # Bestimme die maximale Sequenznummer
 
-    max_seq = os.path.getsize(filename) // BUFFER_SIZE
-    if os.path.getsize(filename) % BUFFER_SIZE != 0:
+    max_seq = os.path.getsize(filenameabs) // BUFFER_SIZE
+    if os.path.getsize(filenameabs) % BUFFER_SIZE != 0:
         max_seq += 1
 
 
@@ -33,15 +36,23 @@ def execute_send(transmissionid,PORT,ipadress,thisfilname):
     # Sende das erste Paket mit der Dateiinformation
     trans_id = int(transmissionid) #1234  Wähle eine Transmission ID
     seq_num = 0
-    filename_len = len(filename)
-    header = struct.pack('!HLL', trans_id, seq_num, max_seq) + filename.encode()
+    filename_encoded = filenamebase.encode()
+    if (len(filename_encoded)<8 | len(filename_encoded)>2048):
+        print('\nuse filenameabs longer 8 and smaller 2048 bytes')
+        sys.exit()
+
+
+    header = struct.pack('!HLL', trans_id, seq_num, max_seq) + filename_encoded
+
+    #start time transit
+    starttransmit = time.time()
     sock.sendto(header, (UDP_IP, UDP_PORT))
 
 
 
 
     # Sende die Datenpakete
-    with open(filename, 'rb') as f:
+    with open(filenameabs, 'rb') as f:
         for i in range(max_seq-1):
             data = f.read(BUFFER_SIZE)
             seq_num += 1
@@ -52,13 +63,14 @@ def execute_send(transmissionid,PORT,ipadress,thisfilname):
 
 
     # Sende das letzte Paket mit dem MD5-Hash
-    with open(filename, 'rb') as f:
+    with open(filenameabs, 'rb') as f:
         data = f.read()
 
     md5 = hashlib.md5(data).digest()
     packet = struct.pack('!HL', trans_id, max_seq) + md5
     sock.sendto(packet, (UDP_IP, UDP_PORT))
-    print()
+    endtransmit = time.time()
+    print(endtransmit-starttransmit)
     # Schließe den Socket
     sock.close()
 
@@ -67,7 +79,7 @@ def main():
     if (len(sys.argv)==5):
         execute_send(sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4])
     else : 
-        print('\nuse format TransimmionID, Port,IP-Adress,Filename ')
+        print('\nuse format TransimmionID, Port,IP-Adress,Filename with path ')
         sys.exit()
 
 
