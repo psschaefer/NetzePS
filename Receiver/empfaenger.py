@@ -3,9 +3,9 @@ import socket
 import hashlib
 import os
 import struct
-
+import time
 # Definiere Konstanten
-BUFFER_SIZE = 1024
+BUFFER_SIZE = 1000
 UDP_IP = 'localhost' #  127.0.0.1'
 UDP_PORT = 5005
 
@@ -13,8 +13,11 @@ UDP_PORT = 5005
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind((UDP_IP, UDP_PORT))
 
+
+
 # Empfangen des ersten Pakets
 header, addr = sock.recvfrom(BUFFER_SIZE*2+10)
+starttransmit = time.time()
 trans_id, seq_num, max_seq= struct.unpack('!HLL', header[:10])
 filename = header[10:].decode()
 
@@ -56,19 +59,23 @@ with open(filename, 'wb') as f:
 
 
 f.close()
+endtransmit = time.time()
+print(f'Transmission finished in:{endtransmit-starttransmit}')
 
 
 with open(filename, 'rb') as f:
     data_for_hash_compare = f.read()
 md5 = hashlib.md5(data_for_hash_compare).hexdigest()
+
+print(f'Calculated Hash:{md5}')
+print(f'Received Hash:{file_md5_recv}')
 if md5 == file_md5_recv :
     print('Korrekter Hash')
 else:
     print('Falscher Hash')
 
 
-print(md5)
-print(file_md5_recv)
+
 
 f.close()
 sock.close()

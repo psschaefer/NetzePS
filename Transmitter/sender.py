@@ -7,7 +7,7 @@ import sys
 import time
 
 
-def execute_send(transmissionid,PORT,ipadress,thisfilnamepath):
+def execute_send(transmissionid,PORT,ipadress,filenameabs):
 
 
     # Definiere Konstanten
@@ -16,10 +16,10 @@ def execute_send(transmissionid,PORT,ipadress,thisfilnamepath):
     UDP_PORT = int(PORT)   #5005
 
     # Wähle die zu sendende Datei
-    filenamebase = os.path.basename(thisfilnamepath)      #'example.txt'
+    filenamebase = os.path.basename(filenameabs)      #'example.txt'
     #/home/Pascal/Studium/Netze/Projekt1/Abgabe/NetzePS/Transmitter/testfiles/example100MB.txt
     #or just example.txt when file in same dir
-    filenameabs= thisfilnamepath
+    
     # Erstelle UDP-Socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
@@ -62,8 +62,8 @@ def execute_send(transmissionid,PORT,ipadress,thisfilnamepath):
             packets_sent+=1
             if (packets_sent % (max_seq//10) == 0):
                 percentage_sent = round(packets_sent/max_seq*100)
-                print(f'{percentage_sent}%of packets sent')
-
+                print(f'{percentage_sent}%')
+        print(f'Transmission complete.')
 
 
     # Sende das letzte Paket mit dem MD5-Hash
