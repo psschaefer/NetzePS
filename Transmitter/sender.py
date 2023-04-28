@@ -11,13 +11,13 @@ def execute_send(transmissionid,PORT,ipadress,thisfilnamepath):
 
 
     # Definiere Konstanten
-    BUFFER_SIZE = 1024
+    BUFFER_SIZE = 1000
     UDP_IP = ipadress     #'localhost'    127.0.0.1'
     UDP_PORT = int(PORT)   #5005
 
     # Wähle die zu sendende Datei
     filenamebase = os.path.basename(thisfilnamepath)      #'example.txt'
-    #/home/Pascal/Studium/Netze/Projekt1/Abgabe/NetzePS/Transmitter/example.txt
+    #/home/Pascal/Studium/Netze/Projekt1/Abgabe/NetzePS/Transmitter/testfiles/example100MB.txt
     #or just example.txt when file in same dir
     filenameabs= thisfilnamepath
     # Erstelle UDP-Socket
@@ -46,19 +46,23 @@ def execute_send(transmissionid,PORT,ipadress,thisfilnamepath):
 
     #start time transit
     starttransmit = time.time()
+    print("Start sending...")
     sock.sendto(header, (UDP_IP, UDP_PORT))
 
 
-
-
+    
     # Sende die Datenpakete
     with open(filenameabs, 'rb') as f:
+        packets_sent=0
         for i in range(max_seq-1):
             data = f.read(BUFFER_SIZE)
             seq_num += 1
             packet = struct.pack('!HL', trans_id, seq_num) + data
             sock.sendto(packet, (UDP_IP, UDP_PORT))
-
+            packets_sent+=1
+            if (packets_sent % (max_seq//10) == 0):
+                percentage_sent = round(packets_sent/max_seq*100)
+                print(f'{percentage_sent}%of packets sent')
 
 
 
@@ -70,9 +74,12 @@ def execute_send(transmissionid,PORT,ipadress,thisfilnamepath):
     packet = struct.pack('!HL', trans_id, max_seq) + md5
     sock.sendto(packet, (UDP_IP, UDP_PORT))
     endtransmit = time.time()
-    print(endtransmit-starttransmit)
+
+    print(f'Transmission time:{endtransmit-starttransmit}')
     # Schließe den Socket
+    
     sock.close()
+    
 
 
 def main():    
