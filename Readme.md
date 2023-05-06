@@ -4,6 +4,6 @@
 
 run in seperate terminals:
 
-1. execute 'python empfaenger.py' without arguments because we dont have any controll messages yet
+1. execute 'python empfaenger.py' with buffersize(1024) and the downloadpath you want to store the file at
 2. execute 'python sender.py 1234 5005 127.0.0.1 example.txt' 
-with (1234 as TransmissionID) (5005 as port) (127.0.0.1 as IP-addres)-here localhost (example.txt as filname with type ending)
+with (1234 as TransmissionID) (5005 as port) (127.0.0.1 as IP-addres)-here buffersie(1024) localhost (example.txt as filname with type ending)
