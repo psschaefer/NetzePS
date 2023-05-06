@@ -7,11 +7,11 @@ import sys
 import time
 
 
-def execute_send(transmissionid,PORT,ipadress,filenameabs):
+def execute_send(transmissionid,PORT,ipadress,buffer,filenameabs):
 
 
     # Definiere Konstanten
-    BUFFER_SIZE = 1000
+    BUFFER_SIZE = int(buffer)
     UDP_IP = ipadress     #'localhost'    127.0.0.1'
     UDP_PORT = int(PORT)   #5005
 
@@ -32,7 +32,7 @@ def execute_send(transmissionid,PORT,ipadress,filenameabs):
 
     #Für letztes Paket mit md5
     max_seq +=1
-
+    print(max_seq)
     # Sende das erste Paket mit der Dateiinformation
     trans_id = int(transmissionid) #1234  Wähle eine Transmission ID
     seq_num = 0
@@ -49,6 +49,15 @@ def execute_send(transmissionid,PORT,ipadress,filenameabs):
     print("Start sending...")
     sock.sendto(header, (UDP_IP, UDP_PORT))
 
+    #wait for ack 
+
+    received_ack,address = sock.recvfrom(6)
+    ack_trans_id,ack_seq_num = struct.unpack('!HL',received_ack)
+    if ack_trans_id != trans_id or ack_seq_num != seq_num:
+        print('first packet transfer failed')
+        sys.exit()
+
+
 
     
     # Sende die Datenpakete
@@ -60,6 +69,13 @@ def execute_send(transmissionid,PORT,ipadress,filenameabs):
             packet = struct.pack('!HL', trans_id, seq_num) + data
             sock.sendto(packet, (UDP_IP, UDP_PORT))
             packets_sent+=1
+            received_ack,address = sock.recvfrom(6)
+            ack_trans_id,ack_seq_num = struct.unpack('!HL',received_ack)
+            if ack_trans_id != trans_id or ack_seq_num != seq_num:
+                print(f"{seq_num} packet transfer failed")
+                sys.exit()
+
+            #just for percentage display
             if (packets_sent % (max_seq//10) == 0):
                 percentage_sent = round(packets_sent/max_seq*100)
                 print(f'{percentage_sent}%')
@@ -83,16 +99,16 @@ def execute_send(transmissionid,PORT,ipadress,filenameabs):
 
 
 def main():    
-    if (len(sys.argv)==5):
-        execute_send(sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4])
+    if (len(sys.argv)==6):
+        execute_send(sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5])
     else : 
-        print('\nuse format TransimmionID, Port,IP-Adress,Filename with path ')
+        print('\nuse format TransimmionID, Port,IP-Adress,buffersize,Filename with path ')
         sys.exit()
 
 
 
 
-if __name__ == "__main__":
+if name == "main":
     try:
         main()
     except KeyboardInterrupt:
