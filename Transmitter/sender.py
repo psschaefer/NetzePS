@@ -76,9 +76,10 @@ def execute_send(transmissionid,PORT,ipadress,buffer,filenameabs):
                 sys.exit()
 
             #just for percentage display
-            if (packets_sent % (max_seq//10) == 0):
-                percentage_sent = round(packets_sent/max_seq*100)
-                print(f'{percentage_sent}%')
+            if(max_seq>=10):
+                if (packets_sent % (max_seq//10) == 0):
+                    percentage_sent = round(packets_sent/max_seq*100)
+                    print(f'{percentage_sent}%')
         print(f'Transmission complete.')
 
 
@@ -90,7 +91,7 @@ def execute_send(transmissionid,PORT,ipadress,buffer,filenameabs):
     packet = struct.pack('!HL', trans_id, max_seq) + md5
     sock.sendto(packet, (UDP_IP, UDP_PORT))
     endtransmit = time.time()
-
+    print(f'hash cal:{md5.hex()}')
     print(f'Transmission time:{endtransmit-starttransmit}')
     # Schließe den Socket
     
@@ -108,7 +109,7 @@ def main():
 
 
 
-if name == "main":
+if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
