@@ -45,7 +45,7 @@ public class sender {
         int maxSeq = (int) Math.ceil(new File(filenameAbs).length() / (double) bufferSize);
         // letztes paket mit md5
         maxSeq = maxSeq+1;
-        System.out.println(maxSeq);        
+               
         byte[] header = new byte[10 + filenameBase.length()];
         ByteBuffer.wrap(header, 0, 2).putShort((short) transmissionId);
         ByteBuffer.wrap(header, 2, 4).putInt(0);
@@ -102,7 +102,7 @@ public class sender {
                 seqNum++;
                 
                 if (maxSeq >= 10 && packetsSent % (maxSeq / 10) == 0) {
-                    int percentageSent = Math.round((packetsSent / maxSeq) * 100);
+                    int percentageSent = Math.round((packetsSent / (float)maxSeq) * 100);
                     System.out.println(percentageSent + "%");
                 }
             }

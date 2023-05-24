@@ -53,7 +53,7 @@ public class receiver {
         DatagramPacket ackPacket = new DatagramPacket(ackData, ackData.length, packet.getAddress(), packet.getPort());
         socket.send(ackPacket);
 
-        System.out.println(maxSeq);
+        
         FileOutputStream fileOutputStream = new FileOutputStream(filePath);
         seqNum = 1;
 
@@ -67,7 +67,7 @@ public class receiver {
                 System.out.println("Falsches Paket empfangen");
                 break;
             }
-            System.out.println("länge ist:" + packet.getLength());
+            
             fileOutputStream.write(packet.getData(), 6, packet.getLength() -6);
             
 
