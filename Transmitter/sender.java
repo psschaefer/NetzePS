@@ -13,8 +13,8 @@ public class sender {
     // use java sender.java 1234 5005 localhost 1024 example1MB.txt 
 
     public static void main(String[] args) {
-        if (args.length != 5) {
-            System.out.println("Usage: java Sender <transmissionid> <port> <ipaddress> <buffer> <filenameabs>");
+        if (args.length != 6) {
+            System.out.println("Usage: java Sender <transmissionid> <port> <ipaddress> <buffer> <filenameabs> <protocol>");
             return;
         }
 
@@ -25,13 +25,185 @@ public class sender {
         String filenameAbs = args[4];
 
         try {
-            executeSend(transmissionId, port, ipAddress, buffer, filenameAbs);
+            if(Integer.parseInt(args[5])== 1){
+                execute_sendSleep(transmissionId, port, ipAddress, buffer, filenameAbs);
+            }else if(Integer.parseInt(args[5])== 2){
+                execute_sendACK(transmissionId, port, ipAddress, buffer, filenameAbs);
+            }else if(Integer.parseInt(args[5])== 3){
+                execute_sendSlidingWindow(transmissionId, port, ipAddress, buffer, filenameAbs); 
+            }else System.out.println("Not implemented yet");
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private static void executeSend(int transmissionId, int port, String ipAddress, int buffer, String filenameAbs)
+    private static void execute_sendSleep(int transmissionId, int port, String ipAddress, int buffer, String filenameAbs)
+            throws IOException {
+        int bufferSize = buffer;
+        String udpIp = ipAddress;
+        int udpPort = port;
+
+        String filenameBase = new File(filenameAbs).getName();
+                
+        DatagramSocket socket = new DatagramSocket();
+        InetAddress address = InetAddress.getByName(udpIp);
+
+        int maxSeq = (int) Math.ceil(new File(filenameAbs).length() / (double) bufferSize);
+        // letztes paket mit md5
+        maxSeq = maxSeq+1;
+               
+        byte[] header = new byte[10 + filenameBase.length()];
+        ByteBuffer.wrap(header, 0, 2).putShort((short) transmissionId);
+        ByteBuffer.wrap(header, 2, 4).putInt(0);
+        ByteBuffer.wrap(header, 6, 4).putInt(maxSeq);
+        System.arraycopy(filenameBase.getBytes(), 0, header, 10, filenameBase.length());
+
+        DatagramPacket packet = new DatagramPacket(header, header.length, address, udpPort);
+        socket.send(packet);
+              
+        
+        try (FileInputStream fileInputStream = new FileInputStream(filenameAbs)) {
+            byte[] bufferData = new byte[bufferSize];
+            int seqNum = 1;
+            int packetsSent = 0;
+
+            while (seqNum < maxSeq) {
+                int bytesRead = fileInputStream.read(bufferData);
+                if (bytesRead == -1) {
+                    break;
+                }
+
+                ByteBuffer packetData = ByteBuffer.allocate(6 + bytesRead);
+                packetData.putShort((short) transmissionId);
+                packetData.putInt(seqNum);
+                packetData.put(bufferData, 0, bytesRead);
+
+                packet = new DatagramPacket(packetData.array(), packetData.array().length, address, udpPort);
+                socket.send(packet);
+                packetsSent++;
+                try{
+                    Thread.sleep((int)(0.0001*bufferSize));
+                } catch (InterruptedException e){
+                    e.printStackTrace();
+                }
+                
+                seqNum++;
+                
+                if (maxSeq >= 10 && packetsSent % (maxSeq / 10) == 0) {
+                    int percentageSent = Math.round((packetsSent / (float)maxSeq) * 100);
+                    System.out.println(percentageSent + "%");
+                }
+            }
+
+            System.out.println("Transmission complete.");
+            
+            byte[] md5 = calculateMd5(new File(filenameAbs),bufferSize);
+            ByteBuffer md5PacketData = ByteBuffer.allocate(6 + md5.length);
+            md5PacketData.putShort((short) transmissionId);
+            md5PacketData.putInt(maxSeq);
+            md5PacketData.put(md5);
+
+            packet = new DatagramPacket(md5PacketData.array(), md5PacketData.array().length, address, udpPort);
+            socket.send(packet);
+            System.out.println("Calculated Md5: " + bytesToHex(md5));
+            fileInputStream.close();
+        }
+        socket.close();
+    }
+
+    private static void execute_sendACK(int transmissionId, int port, String ipAddress, int buffer, String filenameAbs)
+            throws IOException {
+        int bufferSize = buffer;
+        String udpIp = ipAddress;
+        int udpPort = port;
+
+        String filenameBase = new File(filenameAbs).getName();
+                
+        DatagramSocket socket = new DatagramSocket();
+        InetAddress address = InetAddress.getByName(udpIp);
+
+        int maxSeq = (int) Math.ceil(new File(filenameAbs).length() / (double) bufferSize);
+        // letztes paket mit md5
+        maxSeq = maxSeq+1;
+               
+        byte[] header = new byte[10 + filenameBase.length()];
+        ByteBuffer.wrap(header, 0, 2).putShort((short) transmissionId);
+        ByteBuffer.wrap(header, 2, 4).putInt(0);
+        ByteBuffer.wrap(header, 6, 4).putInt(maxSeq);
+        System.arraycopy(filenameBase.getBytes(), 0, header, 10, filenameBase.length());
+
+        DatagramPacket packet = new DatagramPacket(header, header.length, address, udpPort);
+        socket.send(packet);
+        
+        
+        // erhalte erstes ack
+        byte[] ackData = new byte[6];
+        packet = new DatagramPacket(ackData, ackData.length);
+        socket.receive(packet);
+        int ackTransId = ByteBuffer.wrap(packet.getData(), 0, 2).getShort();
+        int ackSeqNum = ByteBuffer.wrap(packet.getData(), 2, 4).getInt();
+
+        if (ackTransId != transmissionId || ackSeqNum != 0) {
+            System.out.println("First packet transfer failed");
+            socket.close();
+            return;
+        }
+
+        try (FileInputStream fileInputStream = new FileInputStream(filenameAbs)) {
+            byte[] bufferData = new byte[bufferSize];
+            int seqNum = 1;
+            int packetsSent = 0;
+
+            while (seqNum < maxSeq) {
+                int bytesRead = fileInputStream.read(bufferData);
+                if (bytesRead == -1) {
+                    break;
+                }
+
+                ByteBuffer packetData = ByteBuffer.allocate(6 + bytesRead);
+                packetData.putShort((short) transmissionId);
+                packetData.putInt(seqNum);
+                packetData.put(bufferData, 0, bytesRead);
+
+                packet = new DatagramPacket(packetData.array(), packetData.array().length, address, udpPort);
+                socket.send(packet);
+                packetsSent++;
+
+                packet = new DatagramPacket(ackData, ackData.length);
+                socket.receive(packet);
+                ackTransId = ByteBuffer.wrap(packet.getData(), 0, 2).getShort();
+                ackSeqNum = ByteBuffer.wrap(packet.getData(), 2, 4).getInt();
+
+                if (ackTransId != transmissionId || ackSeqNum != seqNum) {
+                    System.out.println(seqNum + " packet transfer failed");
+                    return;
+                }
+
+                seqNum++;
+                
+                if (maxSeq >= 10 && packetsSent % (maxSeq / 10) == 0) {
+                    int percentageSent = Math.round((packetsSent / (float)maxSeq) * 100);
+                    System.out.println(percentageSent + "%");
+                }
+            }
+
+            System.out.println("Transmission complete.");
+            
+            byte[] md5 = calculateMd5(new File(filenameAbs),bufferSize);
+            ByteBuffer md5PacketData = ByteBuffer.allocate(6 + md5.length);
+            md5PacketData.putShort((short) transmissionId);
+            md5PacketData.putInt(maxSeq);
+            md5PacketData.put(md5);
+
+            packet = new DatagramPacket(md5PacketData.array(), md5PacketData.array().length, address, udpPort);
+            socket.send(packet);
+            System.out.println("Calculated Md5: " + bytesToHex(md5));
+            fileInputStream.close();
+        }
+        socket.close();
+    }
+
+    private static void execute_sendSlidingWindow(int transmissionId, int port, String ipAddress, int buffer, String filenameAbs)
             throws IOException {
         int bufferSize = buffer;
         String udpIp = ipAddress;

@@ -18,7 +18,7 @@ public class receiver {
     
 
     public static void main(String[] args) {
-        if (args.length != 2) {
+        if (args.length != 3) {
             System.out.println("Usage: java Receiver <buffersize> <downloadpath>");
             return;
         }
@@ -27,13 +27,159 @@ public class receiver {
         String downloadPath = args[1];
 
         try {
-            receive(bufferSize, downloadPath);
+            if(Integer.parseInt(args[2])== 1){
+                excecute_receiveSleep(bufferSize, downloadPath);
+            }else if(Integer.parseInt(args[2])== 2){
+                excecute_receiveACK(bufferSize, downloadPath);
+            }else if(Integer.parseInt(args[2])== 3){
+                excecute_receiveSlidingWindow(bufferSize, downloadPath);
+            }else System.out.println("Not implemented yet");
+            
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private static void receive(int bufferSize, String downloadPath) throws IOException {
+    private static void excecute_receiveSleep(int bufferSize, String downloadPath) throws IOException {
+        DatagramSocket socket = new DatagramSocket(5005);
+        // hier um 6 erhöht weil header dazu
+        byte[] buffer = new byte[bufferSize+6];
+        DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+        socket.receive(packet);
+        // evtl set buffer.length to 2048 wegen filename 2048 idk
+        long startTransmit = System.currentTimeMillis();
+        int transId = ByteBuffer.wrap(packet.getData(), 0, 2).getShort();
+        int seqNum = ByteBuffer.wrap(packet.getData(), 2, 4).getInt();
+        int maxSeq = ByteBuffer.wrap(packet.getData(), 6, 4).getInt();
+        String fileName = new String(packet.getData(), 10, packet.getLength() - 10);
+        String filePath = downloadPath + fileName;
+
+                
+        FileOutputStream fileOutputStream = new FileOutputStream(filePath);
+        seqNum = 1;
+
+        while (seqNum < maxSeq) {
+            packet = new DatagramPacket(buffer, buffer.length);
+            socket.receive(packet);
+            int receivedTransId = ByteBuffer.wrap(packet.getData(), 0, 2).getShort();
+            int receivedSeqNum = ByteBuffer.wrap(packet.getData(), 2, 4).getInt();
+
+            if (transId != receivedTransId || seqNum != receivedSeqNum) {
+                System.out.println("Falsches Paket empfangen");
+                break;
+            }
+            
+            fileOutputStream.write(packet.getData(), 6, packet.getLength() -6);         
+            
+            seqNum++;
+        }
+        System.out.print(seqNum);
+        packet = new DatagramPacket(buffer, buffer.length);
+        socket.receive(packet);
+        int receivedTransId = ByteBuffer.wrap(packet.getData(), 0, 2).getShort();
+        int receivedSeqNum = ByteBuffer.wrap(packet.getData(), 2, 4).getInt();
+        byte[] receivedmd5 = new byte[16];
+        System.arraycopy(packet.getData(), 6, receivedmd5, 0, 16);
+
+        if (transId != receivedTransId || receivedSeqNum != maxSeq) {
+            System.out.println("Fehler beim Empfangen der Datei");
+        }
+
+        fileOutputStream.close();
+        socket.close();
+
+        long endTransmit = System.currentTimeMillis();
+        System.out.println("Transmission finished in: " + (endTransmit - startTransmit) + " ms");
+
+        
+        byte[] md5 = calculateMd5(new File(filePath),bufferSize);
+
+        System.out.println("Calculated Hash: " + bytesToHex(md5));
+        System.out.println("Received Hash: " + bytesToHex(receivedmd5));
+
+        if (MessageDigest.isEqual(md5, receivedmd5)) {
+            System.out.println("Korrekter Hash");
+        } else {
+            System.out.println("Falscher Hash");
+        }
+    }
+
+    private static void excecute_receiveACK(int bufferSize, String downloadPath) throws IOException {
+        DatagramSocket socket = new DatagramSocket(5005);
+        // hier um 6 erhöht weil header dazu
+        byte[] buffer = new byte[bufferSize+6];
+        DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+        socket.receive(packet);
+        // evtl set buffer.length to 2048 wegen filename 2048 idk
+        long startTransmit = System.currentTimeMillis();
+        int transId = ByteBuffer.wrap(packet.getData(), 0, 2).getShort();
+        int seqNum = ByteBuffer.wrap(packet.getData(), 2, 4).getInt();
+        int maxSeq = ByteBuffer.wrap(packet.getData(), 6, 4).getInt();
+        String fileName = new String(packet.getData(), 10, packet.getLength() - 10);
+        String filePath = downloadPath + fileName;
+
+        byte[] ackData = new byte[6];
+        ByteBuffer.wrap(ackData, 0, 2).putShort((short) transId);
+        ByteBuffer.wrap(ackData, 2, 4).putInt(seqNum);
+        DatagramPacket ackPacket = new DatagramPacket(ackData, ackData.length, packet.getAddress(), packet.getPort());
+        socket.send(ackPacket);
+
+        
+        FileOutputStream fileOutputStream = new FileOutputStream(filePath);
+        seqNum = 1;
+
+        while (seqNum < maxSeq) {
+            packet = new DatagramPacket(buffer, buffer.length);
+            socket.receive(packet);
+            int receivedTransId = ByteBuffer.wrap(packet.getData(), 0, 2).getShort();
+            int receivedSeqNum = ByteBuffer.wrap(packet.getData(), 2, 4).getInt();
+
+            if (transId != receivedTransId || seqNum != receivedSeqNum) {
+                System.out.println("Falsches Paket empfangen");
+                break;
+            }
+            
+            fileOutputStream.write(packet.getData(), 6, packet.getLength() -6);
+            
+
+            ByteBuffer.wrap(ackData, 0, 2).putShort((short) transId);
+            ByteBuffer.wrap(ackData, 2, 4).putInt(seqNum);
+            ackPacket = new DatagramPacket(ackData, ackData.length, packet.getAddress(), packet.getPort());
+            socket.send(ackPacket);
+            seqNum++;
+        }
+        System.out.print(seqNum);
+        packet = new DatagramPacket(buffer, buffer.length);
+        socket.receive(packet);
+        int receivedTransId = ByteBuffer.wrap(packet.getData(), 0, 2).getShort();
+        int receivedSeqNum = ByteBuffer.wrap(packet.getData(), 2, 4).getInt();
+        byte[] receivedmd5 = new byte[16];
+        System.arraycopy(packet.getData(), 6, receivedmd5, 0, 16);
+
+        if (transId != receivedTransId || receivedSeqNum != maxSeq) {
+            System.out.println("Fehler beim Empfangen der Datei");
+        }
+
+        fileOutputStream.close();
+        socket.close();
+
+        long endTransmit = System.currentTimeMillis();
+        System.out.println("Transmission finished in: " + (endTransmit - startTransmit) + " ms");
+
+        
+        byte[] md5 = calculateMd5(new File(filePath),bufferSize);
+
+        System.out.println("Calculated Hash: " + bytesToHex(md5));
+        System.out.println("Received Hash: " + bytesToHex(receivedmd5));
+
+        if (MessageDigest.isEqual(md5, receivedmd5)) {
+            System.out.println("Korrekter Hash");
+        } else {
+            System.out.println("Falscher Hash");
+        }
+    }
+
+    private static void excecute_receiveSlidingWindow(int bufferSize, String downloadPath) throws IOException {
         DatagramSocket socket = new DatagramSocket(5005);
         // hier um 6 erhöht weil header dazu
         byte[] buffer = new byte[bufferSize+6];
