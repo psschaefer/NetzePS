@@ -7,6 +7,10 @@ import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.List;
+
+
 
 public class sender {
 
@@ -208,6 +212,7 @@ public class sender {
         int bufferSize = buffer;
         String udpIp = ipAddress;
         int udpPort = port;
+        final int windowsize=10;
 
         String filenameBase = new File(filenameAbs).getName();
                 
@@ -241,6 +246,77 @@ public class sender {
             return;
         }
 
+        // write data into array
+        List<byte[]> packet_array= new ArrayList<>();
+        int seqNum = 1;
+        try (FileInputStream fileInputStream = new FileInputStream(filenameAbs)) {
+            byte[] bufferData = new byte[bufferSize];   
+            int bytesRead;         
+            while ((bytesRead = fileInputStream.read(bufferData)) != -1 && seqNum < maxSeq) {
+                
+                ByteBuffer packetData = ByteBuffer.allocate(6 + bytesRead);
+                packetData.putShort((short) transmissionId);
+                packetData.putInt(seqNum);
+                packetData.put(bufferData, 0, bytesRead);
+                packet_array.add(packetData.array());
+                seqNum++;
+                //System.out.println("size array"+packet_array.size()+"max seq:"+maxSeq);
+            }
+            fileInputStream.close();
+        }
+        
+        seqNum=1;
+        
+        int windowPacketsCounter=0;
+        int windowBase=0;
+        while (seqNum < maxSeq){
+            // sendet window size viele pakete
+            while(seqNum<maxSeq && windowPacketsCounter < windowsize){
+                packet = new DatagramPacket(packet_array.get(windowBase), packet_array.get(windowBase).length, address, udpPort);
+                socket.send(packet);
+                seqNum++;
+                windowBase++;
+                windowPacketsCounter++;
+            }
+            packet = new DatagramPacket(ackData, ackData.length);
+            socket.receive(packet);
+            ackTransId = ByteBuffer.wrap(packet.getData(), 0, 2).getShort();
+            ackSeqNum = ByteBuffer.wrap(packet.getData(), 2, 4).getInt();  
+
+            if (ackTransId != transmissionId) {
+                System.out.println(seqNum + " packet transfer failed");
+                socket.close();
+                return;
+            }
+
+
+            if(ackSeqNum == seqNum-1){
+                System.out.println("alles passst");
+            }else if(ackSeqNum < seqNum-1){
+                System.out.println("duplicate receiced:"+ackSeqNum+"seq:"+(seqNum-1));
+                windowBase=windowBase-(windowBase-ackSeqNum);
+                seqNum = windowBase;
+            }
+
+
+
+            windowPacketsCounter=0;
+        }
+
+        System.out.println("Transmission complete.");
+            
+            byte[] md5 = calculateMd5(new File(filenameAbs),bufferSize);
+            ByteBuffer md5PacketData = ByteBuffer.allocate(6 + md5.length);
+            md5PacketData.putShort((short) transmissionId);
+            md5PacketData.putInt(maxSeq);
+            md5PacketData.put(md5);
+
+            packet = new DatagramPacket(md5PacketData.array(), md5PacketData.array().length, address, udpPort);
+            socket.send(packet);
+            System.out.println("Calculated Md5: " + bytesToHex(md5));
+            
+
+        /*
         try (FileInputStream fileInputStream = new FileInputStream(filenameAbs)) {
             byte[] bufferData = new byte[bufferSize];
             int seqNum = 1;
@@ -291,7 +367,7 @@ public class sender {
             socket.send(packet);
             System.out.println("Calculated Md5: " + bytesToHex(md5));
             fileInputStream.close();
-        }
+        }*/
         socket.close();
     }
 

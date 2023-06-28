@@ -8,6 +8,9 @@ import java.net.DatagramSocket;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 public class receiver {
 
@@ -19,7 +22,7 @@ public class receiver {
 
     public static void main(String[] args) {
         if (args.length != 3) {
-            System.out.println("Usage: java Receiver <buffersize> <downloadpath>");
+            System.out.println("Usage: java Receiver <buffersize> <downloadpath> <protocol>");
             return;
         }
 
@@ -180,6 +183,7 @@ public class receiver {
     }
 
     private static void excecute_receiveSlidingWindow(int bufferSize, String downloadPath) throws IOException {
+        final int windowsize=10;
         DatagramSocket socket = new DatagramSocket(5005);
         // hier um 6 erhöht weil header dazu
         byte[] buffer = new byte[bufferSize+6];
@@ -193,6 +197,7 @@ public class receiver {
         String fileName = new String(packet.getData(), 10, packet.getLength() - 10);
         String filePath = downloadPath + fileName;
 
+        //erstes ack für transid etc
         byte[] ackData = new byte[6];
         ByteBuffer.wrap(ackData, 0, 2).putShort((short) transId);
         ByteBuffer.wrap(ackData, 2, 4).putInt(seqNum);
@@ -200,29 +205,59 @@ public class receiver {
         socket.send(ackPacket);
 
         
-        FileOutputStream fileOutputStream = new FileOutputStream(filePath);
         seqNum = 1;
+        List<byte[]> packet_array= new ArrayList<>();
+        int windowPacketsCounter=0;
+        int lastCorrectSeq=seqNum;
+        int duplicate_ack=0; // gets set to 1 when transmitted wrong
 
         while (seqNum < maxSeq) {
-            packet = new DatagramPacket(buffer, buffer.length);
-            socket.receive(packet);
-            int receivedTransId = ByteBuffer.wrap(packet.getData(), 0, 2).getShort();
-            int receivedSeqNum = ByteBuffer.wrap(packet.getData(), 2, 4).getInt();
+            while(seqNum < maxSeq && windowPacketsCounter < windowsize){
+                
+                
+                packet = new DatagramPacket(buffer, buffer.length);
+                socket.receive(packet);
 
-            if (transId != receivedTransId || seqNum != receivedSeqNum) {
-                System.out.println("Falsches Paket empfangen");
-                break;
+                int receivedTransId = ByteBuffer.wrap(packet.getData(), 0, 2).getShort();
+                int receivedSeqNum = ByteBuffer.wrap(packet.getData(), 2, 4).getInt();
+                
+                
+                
+
+                if (transId == receivedTransId ) {
+                    if(seqNum == receivedSeqNum){
+                        packet_array.add(Arrays.copyOfRange(packet.getData(),6,packet.getLength()));
+                    }else{
+                        if(duplicate_ack==0){
+                            duplicate_ack=1;
+                            lastCorrectSeq=seqNum;
+                        }
+                    }
+                    
+                    
+                }else{
+                    System.out.println("Falsches Paket empfangen");
+                    break;
+                }   
+                      
+
+              
+                seqNum++;
+                windowPacketsCounter++;
             }
-            
-            fileOutputStream.write(packet.getData(), 6, packet.getLength() -6);
-            
 
+            if(duplicate_ack!=0){
+                seqNum=lastCorrectSeq;                
+            }
             ByteBuffer.wrap(ackData, 0, 2).putShort((short) transId);
             ByteBuffer.wrap(ackData, 2, 4).putInt(seqNum);
             ackPacket = new DatagramPacket(ackData, ackData.length, packet.getAddress(), packet.getPort());
             socket.send(ackPacket);
-            seqNum++;
+            windowPacketsCounter=0;
+            duplicate_ack=0;
         }
+       
+
         System.out.print(seqNum);
         packet = new DatagramPacket(buffer, buffer.length);
         socket.receive(packet);
@@ -234,8 +269,12 @@ public class receiver {
         if (transId != receivedTransId || receivedSeqNum != maxSeq) {
             System.out.println("Fehler beim Empfangen der Datei");
         }
-
-        fileOutputStream.close();
+        FileOutputStream fileOutputStream = new FileOutputStream(filePath);
+        for(byte[]packetData:packet_array){
+        
+            fileOutputStream.write(packetData, 0,packetData.length);
+        }
+        fileOutputStream.close();        
         socket.close();
 
         long endTransmit = System.currentTimeMillis();
