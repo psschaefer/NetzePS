@@ -180,6 +180,7 @@ def execute_sendSlidingWindow(transmissionid,PORT,ipadress,buffer,filenameabs):
 
 
     # Definiere Konstanten
+    WINDOW_SIZE= 100
     BUFFER_SIZE = int(buffer)
     UDP_IP = ipadress     #'localhost'    127.0.0.1'
     UDP_PORT = int(PORT)   #5005
@@ -230,26 +231,53 @@ def execute_sendSlidingWindow(transmissionid,PORT,ipadress,buffer,filenameabs):
 
     
     # Sende die Datenpakete
+    packet_array = []
     with open(filenameabs, 'rb') as f:
-        packets_sent=0
+        
         for i in range(max_seq-1):
             data = f.read(BUFFER_SIZE)
             seq_num += 1
             packet = struct.pack('!HL', trans_id, seq_num) + data
-            sock.sendto(packet, (UDP_IP, UDP_PORT))
-            packets_sent+=1
-            received_ack,address = sock.recvfrom(6)
-            ack_trans_id,ack_seq_num = struct.unpack('!HL',received_ack)
-            if ack_trans_id != trans_id or ack_seq_num != seq_num:
-                print(f"{seq_num} packet transfer failed")
-                sys.exit()
+            packet_array.append(packet)
+        
+    
 
-            #just for percentage display
-            if(max_seq>=10):
-                if (packets_sent % (max_seq//10) == 0):
-                    percentage_sent = round(packets_sent/max_seq*100)
-                    print(f'{percentage_sent}%')
-        print(f'Transmission complete.')
+    # Sende die Datenpakete
+    window_packets_counter = 0
+    window_base = 0
+    seq_num=1
+    
+    while seq_num < (max_seq-1):
+        
+        #sendet WINDOW_SIZE viele pakete
+        while (seq_num < max_seq) & (window_packets_counter < WINDOW_SIZE):                
+            
+            
+            #print(seq_num,max_seq,window_base)                 
+            sock.sendto(packet_array[window_base], (UDP_IP, UDP_PORT))
+            window_packets_counter+=1
+            window_base+=1
+            seq_num += 1
+                
+
+            
+        received_ack,address = sock.recvfrom(6)
+        ack_trans_id,ack_seq_num = struct.unpack('!HL',received_ack)
+        #print(f"window base:{seq_num} seq_num={ack_seq_num}")
+        if ack_trans_id != trans_id :
+            print(f"{seq_num} packet transfer failed")
+            window_base=window_base-WINDOW_SIZE
+            sys.exit()
+                  
+              
+        if(ack_seq_num < seq_num):
+            print(f"duplicate received: {ack_seq_num}")
+            window_base=window_base - (window_base-ack_seq_num)
+            seq_num= window_base
+            
+        
+        window_packets_counter=0
+
 
 
     # Sende das letzte Paket mit dem MD5-Hash
@@ -277,7 +305,7 @@ def main():
             execute_sendSleep(sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5])
         elif(int(sys.argv[6])==2):
             execute_sendACK(sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5])
-        elif(sys.argv[6]==3):            
+        elif(int(sys.argv[6])==3):            
             execute_sendSlidingWindow(sys.argv[1],sys.argv[2],sys.argv[3],sys.argv[4],sys.argv[5])
         else:
             print('\nProtocol type not implemented yet')
