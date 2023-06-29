@@ -180,7 +180,7 @@ def execute_sendSlidingWindow(transmissionid,PORT,ipadress,buffer,filenameabs):
 
 
     # Definiere Konstanten
-    WINDOW_SIZE= 100
+    WINDOW_SIZE= 10
     BUFFER_SIZE = int(buffer)
     UDP_IP = ipadress     #'localhost'    127.0.0.1'
     UDP_PORT = int(PORT)   #5005
@@ -266,14 +266,14 @@ def execute_sendSlidingWindow(transmissionid,PORT,ipadress,buffer,filenameabs):
         #print(f"window base:{seq_num} seq_num={ack_seq_num}")
         if ack_trans_id != trans_id :
             print(f"{seq_num} packet transfer failed")
-            window_base=window_base-WINDOW_SIZE
+            #window_base=window_base-WINDOW_SIZE
             sys.exit()
                   
               
         if(ack_seq_num < seq_num):
             print(f"duplicate received: {ack_seq_num}")
             window_base=window_base - (window_base-ack_seq_num)
-            seq_num= window_base
+            seq_num= window_base+1
             
         
         window_packets_counter=0

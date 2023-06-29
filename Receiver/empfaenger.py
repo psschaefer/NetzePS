@@ -178,7 +178,7 @@ def excecute_receiveACK(buffersize,downloadpath):
 
 
 def excecute_receiveSlidingWindow(buffersize,downloadpath):
-    WINDOW_SIZE= 100
+    WINDOW_SIZE= 10
     BUFFER_SIZE = int(buffersize)
     UDP_IP = 'localhost' #  127.0.0.1'
     UDP_PORT = 5005
@@ -224,7 +224,7 @@ def excecute_receiveSlidingWindow(buffersize,downloadpath):
                     else:
                         if(duplicate_ack==0):
                             duplicate_ack=1
-                            last_correct_seq= seq_num
+                            last_correct_seq= seq_num-1
                         #print(f'seq passt nicht:{trans_id_recv}{seq_num_recv}')
                 else:     
                     print(f'Falsches Paket empfangen:{trans_id_recv}{seq_num_recv}')
@@ -235,13 +235,17 @@ def excecute_receiveSlidingWindow(buffersize,downloadpath):
                 window_packets_counter+=1
                        
             if(duplicate_ack!=0 ):
-                seq_num=last_correct_seq  
+                seq_num=last_correct_seq+1
+                ack=struct.pack('!HL',trans_id,last_correct_seq)
+                sock.sendto(ack,addr)     
                 print(seq_num)                              
+            else:
+                ack=struct.pack('!HL',trans_id,seq_num)
+                sock.sendto(ack,addr)  
             
             
-            #send ack after right transid and data was written
-            ack=struct.pack('!HL',trans_id,seq_num)
-            sock.sendto(ack,addr)   
+            
+               
             window_packets_counter=0     
             duplicate_ack=0
     
